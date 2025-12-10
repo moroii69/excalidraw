@@ -315,6 +315,10 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
               shortcuts={[getShortcutFromShortcutName("searchMenu")]}
             />
             <Shortcut
+              label={t("buttons.toggleMinimap")}
+              shortcuts={[getShortcutFromShortcutName("toggleMinimap")]}
+            />
+            <Shortcut
               label={t("commandPalette.title")}
               shortcuts={
                 isFirefox
