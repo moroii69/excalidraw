@@ -18,7 +18,6 @@ import {
   useExcalidrawAppState,
   useExcalidrawSetAppState,
 } from "./App";
-import { Island } from "./Island";
 
 import type { AppState, BinaryFiles } from "../types";
 
@@ -61,7 +60,13 @@ const Minimap: React.FC = React.memo(() => {
   }, [sceneBounds]);
 
   const updateMinimap = useCallback(async () => {
-    if (!elements.length || !sceneBounds) {
+    if (
+      !elements.length ||
+      !sceneBounds ||
+      sceneBounds.width <= 0 ||
+      sceneBounds.height <= 0
+    ) {
+      setMinimapCanvas(null);
       return;
     }
 
@@ -75,16 +80,27 @@ const Minimap: React.FC = React.memo(() => {
         } as AppState,
         files: {} as BinaryFiles,
         getDimensions: (width: number, height: number) => ({
-          width: sceneBounds.width * minimapScale,
-          height: sceneBounds.height * minimapScale,
+          width: Math.max(1, sceneBounds.width * minimapScale),
+          height: Math.max(1, sceneBounds.height * minimapScale),
           scale: minimapScale,
         }),
         exportPadding: 0,
         exportingFrame: null,
       });
-      setMinimapCanvas(canvas);
+
+      if (canvas && canvas.width > 0 && canvas.height > 0) {
+        setMinimapCanvas(canvas);
+      } else {
+        console.warn(
+          "Minimap canvas has invalid dimensions:",
+          canvas?.width,
+          canvas?.height,
+        );
+        setMinimapCanvas(null);
+      }
     } catch (error) {
       console.error("Failed to render minimap:", error);
+      setMinimapCanvas(null);
     }
   }, [elements, appState, sceneBounds, minimapScale]);
 
@@ -96,8 +112,11 @@ const Minimap: React.FC = React.memo(() => {
   }, [updateMinimap]);
 
   useEffect(() => {
-    if (appState.showMinimap) {
+    if (appState.showMinimap && elements.length > 0) {
       debouncedUpdate();
+    } else if (!appState.showMinimap || elements.length === 0) {
+      // Clear the canvas immediately when minimap is hidden or no elements
+      setMinimapCanvas(null);
     }
   }, [
     elements,
@@ -224,7 +243,9 @@ const Minimap: React.FC = React.memo(() => {
       event.preventDefault();
 
       const handleGlobalMouseMove = (e: MouseEvent) => {
-        if (!isDraggingMinimapRef.current) return;
+        if (!isDraggingMinimapRef.current) {
+          return;
+        }
 
         const newX = e.clientX - dragStartRef.current.x;
         const newY = e.clientY - dragStartRef.current.y;
@@ -255,7 +276,7 @@ const Minimap: React.FC = React.memo(() => {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !minimapCanvas) {
+    if (!canvas) {
       return;
     }
 
@@ -267,10 +288,20 @@ const Minimap: React.FC = React.memo(() => {
     // clearing canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const offsetX = Math.max(0, (canvas.width - minimapCanvas.width) / 2);
-    const offsetY = Math.max(0, (canvas.height - minimapCanvas.height) / 2);
+    let offsetX = 0;
+    let offsetY = 0;
 
-    ctx.drawImage(minimapCanvas, offsetX, offsetY);
+    if (minimapCanvas && minimapCanvas.width > 0 && minimapCanvas.height > 0) {
+      offsetX = Math.max(0, (canvas.width - minimapCanvas.width) / 2);
+      offsetY = Math.max(0, (canvas.height - minimapCanvas.height) / 2);
+
+      try {
+        ctx.drawImage(minimapCanvas, offsetX, offsetY);
+      } catch (error) {
+        console.error("Failed to draw minimap canvas:", error);
+        return;
+      }
+    }
 
     if (viewportRect) {
       const rectX = viewportRect.x + offsetX;
@@ -302,6 +333,15 @@ const Minimap: React.FC = React.memo(() => {
     return null;
   }
 
+  if (
+    !elements.length ||
+    !minimapCanvas ||
+    minimapCanvas.width === 0 ||
+    minimapCanvas.height === 0
+  ) {
+    return null;
+  }
+
   return (
     <div
       style={{
@@ -309,134 +349,131 @@ const Minimap: React.FC = React.memo(() => {
         left: `${appState.minimapPosition.x}px`,
         top: `${appState.minimapPosition.y}px`,
         zIndex: 1000,
+        backgroundColor: "var(--island-bg-color)",
+        boxShadow: "var(--shadow-island)",
+        borderRadius: "var(--border-radius-lg)",
+        padding: "calc(var(--space-factor) * 1)",
       }}
     >
-      <Island padding={1}>
-        {/* Header area for dragging */}
+      <div
+        data-minimap-header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "6px",
+          padding: "2px 6px",
+          cursor: isDraggingMinimapRef.current ? "grabbing" : "grab",
+          userSelect: "none",
+        }}
+        onMouseDown={handleMinimapMouseDown}
+      >
         <div
-          data-minimap-header
+          style={{
+            fontSize: "11px",
+            fontWeight: "500",
+            color: "var(--text-primary-color)",
+          }}
+        >
+          Minimap
+        </div>
+        <div
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "6px",
-            padding: "2px 6px",
-            cursor: isDraggingMinimapRef.current ? "grabbing" : "grab",
-            userSelect: "none",
+            gap: "6px",
           }}
-          onMouseDown={handleMinimapMouseDown}
         >
           <div
             style={{
-              fontSize: "11px",
-              fontWeight: "500",
+              fontSize: "10px",
               color: "var(--text-primary-color)",
+              opacity: 0.8,
             }}
           >
-            Minimap
+            {Math.round(appState.zoom.value * 100)}%
           </div>
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
+              fontSize: "9px",
+              color: "var(--keybinding-color)",
+              backgroundColor: "var(--button-gray-1)",
+              padding: "1px 3px",
+              borderRadius: "2px",
+              fontWeight: "500",
+              border: "1px solid var(--default-border-color)",
             }}
           >
-            <div
-              style={{
-                fontSize: "10px",
-                color: "var(--text-primary-color)",
-                opacity: 0.8,
-              }}
-            >
-              {Math.round(appState.zoom.value * 100)}%
-            </div>
-            <div
-              style={{
-                fontSize: "9px",
-                color: "var(--keybinding-color)",
-                backgroundColor: "var(--button-gray-1)",
-                padding: "1px 3px",
-                borderRadius: "2px",
-                fontWeight: "500",
-                border: "1px solid var(--default-border-color)",
-              }}
-            >
-              M
-            </div>
+            M
           </div>
         </div>
+      </div>
 
-        <canvas
-          ref={canvasRef}
-          width={MINIMAP_SIZE}
-          height={MINIMAP_SIZE}
-          style={{
-            display: "block",
-            borderRadius: "var(--border-radius-md)",
-            cursor: "crosshair",
-          }}
-          onMouseDown={handleCanvasMouseDown}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseUp={handleCanvasMouseUp}
-          onMouseLeave={handleCanvasMouseUp}
-          onDoubleClick={handleDoubleClick}
-        />
+      <canvas
+        ref={canvasRef}
+        width={MINIMAP_SIZE}
+        height={MINIMAP_SIZE}
+        style={{
+          display: "block",
+          borderRadius: "var(--border-radius-md)",
+          cursor: "crosshair",
+        }}
+        onMouseDown={handleCanvasMouseDown}
+        onMouseMove={handleCanvasMouseMove}
+        onMouseUp={handleCanvasMouseUp}
+        onMouseLeave={handleCanvasMouseUp}
+        onDoubleClick={handleDoubleClick}
+      />
 
-        {appState.collaborators &&
-          Object.values(appState.collaborators).map((collaborator) => {
-            if (!collaborator.pointer || !sceneBounds) {
-              return null;
-            }
+      {appState.collaborators &&
+        Object.values(appState.collaborators).map((collaborator) => {
+          if (!collaborator.pointer || !sceneBounds) {
+            return null;
+          }
 
-            const collabViewportMinX = -collaborator.pointer.x;
-            const collabViewportMinY = -collaborator.pointer.y;
-            const collabViewportMaxX =
-              collabViewportMinX + appState.width / appState.zoom.value;
-            const collabViewportMaxY =
-              collabViewportMinY + appState.height / appState.zoom.value;
+          const collabViewportMinX = -collaborator.pointer.x;
+          const collabViewportMinY = -collaborator.pointer.y;
+          const collabViewportMaxX =
+            collabViewportMinX + appState.width / appState.zoom.value;
+          const collabViewportMaxY =
+            collabViewportMinY + appState.height / appState.zoom.value;
 
-            const minimapCollabMinX =
-              (collabViewportMinX - sceneBounds.minX) * minimapScale;
-            const minimapCollabMinY =
-              (collabViewportMinY - sceneBounds.minY) * minimapScale;
-            const minimapCollabMaxX =
-              (collabViewportMaxX - sceneBounds.minX) * minimapScale;
-            const minimapCollabMaxY =
-              (collabViewportMaxY - sceneBounds.minY) * minimapScale;
+          const minimapCollabMinX =
+            (collabViewportMinX - sceneBounds.minX) * minimapScale;
+          const minimapCollabMinY =
+            (collabViewportMinY - sceneBounds.minY) * minimapScale;
+          const minimapCollabMaxX =
+            (collabViewportMaxX - sceneBounds.minX) * minimapScale;
+          const minimapCollabMaxY =
+            (collabViewportMaxY - sceneBounds.minY) * minimapScale;
 
-            const offsetX = Math.max(
-              0,
-              (MINIMAP_SIZE - (minimapCanvas?.width || 0)) / 2,
-            );
-            const offsetY = Math.max(
-              0,
-              (MINIMAP_SIZE - (minimapCanvas?.height || 0)) / 2,
-            );
+          const offsetX = Math.max(
+            0,
+            (MINIMAP_SIZE - (minimapCanvas?.width || 0)) / 2,
+          );
+          const offsetY = Math.max(
+            0,
+            (MINIMAP_SIZE - (minimapCanvas?.height || 0)) / 2,
+          );
 
-            return (
-              <div
-                key={collaborator.socketId || collaborator.id}
-                style={{
-                  position: "absolute",
-                  left: minimapCollabMinX + offsetX + 8, // Account for Island padding
-                  top: minimapCollabMinY + offsetY + 8 + 24, // Account for header only
-                  width: minimapCollabMaxX - minimapCollabMinX,
-                  height: minimapCollabMaxY - minimapCollabMinY,
-                  border: `2px solid ${
-                    collaborator.color?.stroke || "#007bff"
-                  }`,
-                  backgroundColor: `${
-                    collaborator.color?.stroke || "#007bff"
-                  }20`,
-                  pointerEvents: "none",
-                  zIndex: 1,
-                }}
-                title={`${collaborator.username || "Anonymous"}'s view`}
-              />
-            );
-          })}
-      </Island>
+          return (
+            <div
+              key={collaborator.socketId || collaborator.id}
+              style={{
+                position: "absolute",
+                left: minimapCollabMinX + offsetX + 8,
+                top: minimapCollabMinY + offsetY + 8 + 24,
+                width: minimapCollabMaxX - minimapCollabMinX,
+                height: minimapCollabMaxY - minimapCollabMinY,
+                border: `2px solid ${collaborator.color?.stroke || "#007bff"}`,
+                backgroundColor: `${collaborator.color?.stroke || "#007bff"}20`,
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+              title={`${collaborator.username || "Anonymous"}'s view`}
+            />
+          );
+        })}
     </div>
   );
 });
