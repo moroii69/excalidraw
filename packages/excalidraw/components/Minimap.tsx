@@ -338,12 +338,10 @@ const Minimap: React.FC = React.memo(() => {
     return null;
   }
 
-  if (
-    !elements.length ||
-    !minimapCanvas ||
-    minimapCanvas.width === 0 ||
-    minimapCanvas.height === 0
-  ) {
+  const isLoading =
+    !minimapCanvas || minimapCanvas.width === 0 || minimapCanvas.height === 0;
+
+  if (!elements.length && !isLoading) {
     return null;
   }
 
@@ -414,23 +412,44 @@ const Minimap: React.FC = React.memo(() => {
         </div>
       </div>
 
-      <canvas
-        ref={canvasRef}
-        width={MINIMAP_SIZE}
-        height={MINIMAP_SIZE}
-        style={{
-          display: "block",
-          borderRadius: "var(--border-radius-md)",
-          cursor: "crosshair",
-        }}
-        onMouseDown={handleCanvasMouseDown}
-        onMouseMove={handleCanvasMouseMove}
-        onMouseUp={handleCanvasMouseUp}
-        onMouseLeave={handleCanvasMouseUp}
-        onDoubleClick={handleDoubleClick}
-      />
+      {isLoading ? (
+        <div
+          style={{
+            width: MINIMAP_SIZE,
+            height: MINIMAP_SIZE,
+            borderRadius: "var(--border-radius-md)",
+            backgroundColor: "var(--color-surface-low)",
+            border: "1px solid var(--color-border)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--text-primary-color)",
+            fontSize: "11px",
+            opacity: 0.7,
+          }}
+        >
+          Loading...
+        </div>
+      ) : (
+        <canvas
+          ref={canvasRef}
+          width={MINIMAP_SIZE}
+          height={MINIMAP_SIZE}
+          style={{
+            display: "block",
+            borderRadius: "var(--border-radius-md)",
+            cursor: "crosshair",
+          }}
+          onMouseDown={handleCanvasMouseDown}
+          onMouseMove={handleCanvasMouseMove}
+          onMouseUp={handleCanvasMouseUp}
+          onMouseLeave={handleCanvasMouseUp}
+          onDoubleClick={handleDoubleClick}
+        />
+      )}
 
-      {appState.collaborators &&
+      {!isLoading &&
+        appState.collaborators &&
         Object.values(appState.collaborators).map((collaborator) => {
           if (!collaborator.pointer || !sceneBounds) {
             return null;
