@@ -128,6 +128,8 @@ export const getDefaultAppState = (): Omit<
     lockedMultiSelections: {},
     activeLockedId: null,
     bindMode: "orbit",
+    showMinimap: true,
+    minimapPosition: { x: 20, y: 20 },
   };
 };
 
@@ -254,6 +256,8 @@ const APP_STATE_STORAGE_CONF = (<
   lockedMultiSelections: { browser: true, export: true, server: true },
   activeLockedId: { browser: false, export: false, server: false },
   bindMode: { browser: true, export: false, server: false },
+  showMinimap: { browser: true, export: false, server: false },
+  minimapPosition: { browser: true, export: false, server: false },
 });
 
 const _clearAppStateForStorage = <

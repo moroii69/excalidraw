@@ -7,380 +7,364 @@ import React, {
 } from "react";
 
 import { getCommonBounds } from "@excalidraw/element";
-import { ZOOM_STEP } from "@excalidraw/common";
 
 import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
 import { exportToCanvas } from "../index";
 import { zoomToFit } from "../actions/actionCanvas";
-import { getStateForZoom } from "../scene/zoom";
-import { getNormalizedZoom } from "../scene/normalize";
 
 import {
   useExcalidrawElements,
   useExcalidrawAppState,
   useExcalidrawSetAppState,
 } from "./App";
+import { Island } from "./Island";
 
 import type { AppState, BinaryFiles } from "../types";
-
-interface MinimapProps {
-  isVisible?: boolean;
-  onToggle?: () => void;
-}
 
 const MINIMAP_SIZE = 150;
 const DEBOUNCE_DELAY = 300;
 
-const Minimap: React.FC<MinimapProps> = React.memo(
-  ({ isVisible = true, onToggle }) => {
-    const elements = useExcalidrawElements();
-    const appState = useExcalidrawAppState();
-    const setAppState = useExcalidrawSetAppState();
+const Minimap: React.FC = React.memo(() => {
+  const elements = useExcalidrawElements();
+  const appState = useExcalidrawAppState();
+  const setAppState = useExcalidrawSetAppState();
 
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [minimapCanvas, setMinimapCanvas] =
-      useState<HTMLCanvasElement | null>(null);
-    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const isDraggingRef = useRef(false);
-    const dragStartRef = useRef({ x: 0, y: 0 });
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [minimapCanvas, setMinimapCanvas] = useState<HTMLCanvasElement | null>(
+    null,
+  );
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDraggingRef = useRef(false);
+  const isDraggingMinimapRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
 
-    const sceneBounds = useMemo(() => {
-      if (!elements.length) {
-        return null;
-      }
-      const [minX, minY, maxX, maxY] = getCommonBounds(
-        elements as NonDeletedExcalidrawElement[],
-      );
-      const width = maxX - minX;
-      const height = maxY - minY;
-      return { minX, minY, maxX, maxY, width, height };
-    }, [elements]);
+  const sceneBounds = useMemo(() => {
+    if (!elements.length) {
+      return null;
+    }
+    const [minX, minY, maxX, maxY] = getCommonBounds(
+      elements as NonDeletedExcalidrawElement[],
+    );
+    const width = maxX - minX;
+    const height = maxY - minY;
+    return { minX, minY, maxX, maxY, width, height };
+  }, [elements]);
 
-    const minimapScale = useMemo(() => {
-      if (!sceneBounds) {
-        return 1;
-      }
-      const scaleX = MINIMAP_SIZE / sceneBounds.width;
-      const scaleY = MINIMAP_SIZE / sceneBounds.height;
-      return Math.min(scaleX, scaleY, 1); // dont scale up, only down
-    }, [sceneBounds]);
+  const minimapScale = useMemo(() => {
+    if (!sceneBounds) {
+      return 1;
+    }
+    const scaleX = MINIMAP_SIZE / sceneBounds.width;
+    const scaleY = MINIMAP_SIZE / sceneBounds.height;
+    return Math.min(scaleX, scaleY, 1); // dont scale up, only down
+  }, [sceneBounds]);
 
-    const updateMinimap = useCallback(async () => {
-      if (!elements.length || !sceneBounds) {
+  const updateMinimap = useCallback(async () => {
+    if (!elements.length || !sceneBounds) {
+      return;
+    }
+
+    try {
+      const canvas = await exportToCanvas({
+        elements: elements as NonDeletedExcalidrawElement[],
+        appState: {
+          ...appState,
+          scrollX: -sceneBounds.minX,
+          scrollY: -sceneBounds.minY,
+        } as AppState,
+        files: {} as BinaryFiles,
+        getDimensions: (width: number, height: number) => ({
+          width: sceneBounds.width * minimapScale,
+          height: sceneBounds.height * minimapScale,
+          scale: minimapScale,
+        }),
+        exportPadding: 0,
+        exportingFrame: null,
+      });
+      setMinimapCanvas(canvas);
+    } catch (error) {
+      console.error("Failed to render minimap:", error);
+    }
+  }, [elements, appState, sceneBounds, minimapScale]);
+
+  const debouncedUpdate = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(updateMinimap, DEBOUNCE_DELAY);
+  }, [updateMinimap]);
+
+  useEffect(() => {
+    if (appState.showMinimap) {
+      debouncedUpdate();
+    }
+  }, [
+    elements,
+    appState.scrollX,
+    appState.scrollY,
+    appState.zoom.value,
+    appState.showMinimap,
+    debouncedUpdate,
+  ]);
+
+  const viewportRect = useMemo(() => {
+    if (!minimapCanvas || !sceneBounds) {
+      return null;
+    }
+
+    const viewportWidth = appState.width / appState.zoom.value;
+    const viewportHeight = appState.height / appState.zoom.value;
+
+    const viewportMinX = -appState.scrollX;
+    const viewportMinY = -appState.scrollY;
+    const viewportMaxX = viewportMinX + viewportWidth;
+    const viewportMaxY = viewportMinY + viewportHeight;
+
+    const minimapViewportMinX =
+      (viewportMinX - sceneBounds.minX) * minimapScale;
+    const minimapViewportMinY =
+      (viewportMinY - sceneBounds.minY) * minimapScale;
+    const minimapViewportMaxX =
+      (viewportMaxX - sceneBounds.minX) * minimapScale;
+    const minimapViewportMaxY =
+      (viewportMaxY - sceneBounds.minY) * minimapScale;
+
+    return {
+      x: minimapViewportMinX,
+      y: minimapViewportMinY,
+      width: minimapViewportMaxX - minimapViewportMinX,
+      height: minimapViewportMaxY - minimapViewportMinY,
+    };
+  }, [minimapCanvas, sceneBounds, appState, minimapScale]);
+
+  const handleCanvasMouseDown = useCallback(
+    (event: React.MouseEvent) => {
+      if (!minimapCanvas || !sceneBounds) {
         return;
       }
 
-      try {
-        const canvas = await exportToCanvas({
-          elements: elements as NonDeletedExcalidrawElement[],
-          appState: {
-            ...appState,
-            scrollX: -sceneBounds.minX,
-            scrollY: -sceneBounds.minY,
-          } as AppState,
-          files: {} as BinaryFiles,
-          getDimensions: (width: number, height: number) => ({
-            width: sceneBounds.width * minimapScale,
-            height: sceneBounds.height * minimapScale,
-            scale: minimapScale,
-          }),
-          exportPadding: 0,
-          exportingFrame: null,
-        });
-        setMinimapCanvas(canvas);
-      } catch (error) {
-        console.error("Failed to render minimap:", error);
-      }
-    }, [elements, appState, sceneBounds, minimapScale]);
+      isDraggingRef.current = true;
+      dragStartRef.current = { x: event.clientX, y: event.clientY };
 
-    const debouncedUpdate = useCallback(() => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
       }
-      debounceTimerRef.current = setTimeout(updateMinimap, DEBOUNCE_DELAY);
-    }, [updateMinimap]);
 
-    useEffect(() => {
-      if (isVisible) {
-        debouncedUpdate();
-      }
-    }, [
-      elements,
-      appState.scrollX,
-      appState.scrollY,
-      appState.zoom.value,
-      isVisible,
-      debouncedUpdate,
-    ]);
+      const clickX = event.clientX - rect.left;
+      const clickY = event.clientY - rect.top;
 
-    const viewportRect = useMemo(() => {
-      if (!minimapCanvas || !sceneBounds) {
-        return null;
-      }
+      const offsetX = Math.max(0, (MINIMAP_SIZE - minimapCanvas.width) / 2);
+      const offsetY = Math.max(0, (MINIMAP_SIZE - minimapCanvas.height) / 2);
+
+      const adjustedClickX = clickX - offsetX;
+      const adjustedClickY = clickY - offsetY;
+
+      const sceneX = adjustedClickX / minimapScale + sceneBounds.minX;
+      const sceneY = adjustedClickY / minimapScale + sceneBounds.minY;
 
       const viewportWidth = appState.width / appState.zoom.value;
       const viewportHeight = appState.height / appState.zoom.value;
 
-      const viewportMinX = -appState.scrollX;
-      const viewportMinY = -appState.scrollY;
-      const viewportMaxX = viewportMinX + viewportWidth;
-      const viewportMaxY = viewportMinY + viewportHeight;
+      const newScrollX = -(sceneX - viewportWidth / 2);
+      const newScrollY = -(sceneY - viewportHeight / 2);
 
-      const minimapViewportMinX =
-        (viewportMinX - sceneBounds.minX) * minimapScale;
-      const minimapViewportMinY =
-        (viewportMinY - sceneBounds.minY) * minimapScale;
-      const minimapViewportMaxX =
-        (viewportMaxX - sceneBounds.minX) * minimapScale;
-      const minimapViewportMaxY =
-        (viewportMaxY - sceneBounds.minY) * minimapScale;
+      setAppState({
+        scrollX: newScrollX,
+        scrollY: newScrollY,
+      });
+    },
+    [minimapCanvas, sceneBounds, minimapScale, appState, setAppState],
+  );
 
-      return {
-        x: minimapViewportMinX,
-        y: minimapViewportMinY,
-        width: minimapViewportMaxX - minimapViewportMinX,
-        height: minimapViewportMaxY - minimapViewportMinY,
+  const handleCanvasMouseMove = useCallback(
+    (event: React.MouseEvent) => {
+      if (!isDraggingRef.current || !minimapCanvas || !sceneBounds) {
+        return;
+      }
+
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+
+      const deltaX = event.clientX - dragStartRef.current.x;
+      const deltaY = event.clientY - dragStartRef.current.y;
+
+      const sceneDeltaX = deltaX / minimapScale;
+      const sceneDeltaY = deltaY / minimapScale;
+
+      setAppState({
+        scrollX: appState.scrollX - sceneDeltaX,
+        scrollY: appState.scrollY - sceneDeltaY,
+      });
+
+      dragStartRef.current = { x: event.clientX, y: event.clientY };
+    },
+    [minimapCanvas, sceneBounds, minimapScale, appState, setAppState],
+  );
+
+  const handleCanvasMouseUp = useCallback(() => {
+    isDraggingRef.current = false;
+  }, []);
+
+  const handleMinimapMouseDown = useCallback(
+    (event: React.MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest("[data-minimap-header]")) {
+        return;
+      }
+
+      isDraggingMinimapRef.current = true;
+      dragStartRef.current = {
+        x: event.clientX - appState.minimapPosition.x,
+        y: event.clientY - appState.minimapPosition.y,
       };
-    }, [minimapCanvas, sceneBounds, appState, minimapScale]);
+      event.preventDefault();
 
-    const handleMouseDown = useCallback(
-      (event: React.MouseEvent) => {
-        if (!minimapCanvas || !sceneBounds) {
-          return;
-        }
+      const handleGlobalMouseMove = (e: MouseEvent) => {
+        if (!isDraggingMinimapRef.current) return;
 
-        isDraggingRef.current = true;
-        dragStartRef.current = { x: event.clientX, y: event.clientY };
+        const newX = e.clientX - dragStartRef.current.x;
+        const newY = e.clientY - dragStartRef.current.y;
 
-        const rect = canvasRef.current?.getBoundingClientRect();
-        if (!rect) {
-          return;
-        }
-
-        const clickX = event.clientX - rect.left;
-        const clickY = event.clientY - rect.top;
-
-        const offsetX = Math.max(0, (MINIMAP_SIZE - minimapCanvas.width) / 2);
-        const offsetY = Math.max(0, (MINIMAP_SIZE - minimapCanvas.height) / 2);
-
-        const adjustedClickX = clickX - offsetX;
-        const adjustedClickY = clickY - offsetY;
-
-        const sceneX = adjustedClickX / minimapScale + sceneBounds.minX;
-        const sceneY = adjustedClickY / minimapScale + sceneBounds.minY;
-
-        const viewportWidth = appState.width / appState.zoom.value;
-        const viewportHeight = appState.height / appState.zoom.value;
-
-        const newScrollX = -(sceneX - viewportWidth / 2);
-        const newScrollY = -(sceneY - viewportHeight / 2);
+        const padding = 10;
+        const maxX = window.innerWidth - 200 - padding;
+        const maxY = window.innerHeight - 200 - padding;
 
         setAppState({
-          scrollX: newScrollX,
-          scrollY: newScrollY,
+          minimapPosition: {
+            x: Math.max(padding, Math.min(newX, maxX)),
+            y: Math.max(padding, Math.min(newY, maxY)),
+          },
         });
-      },
-      [minimapCanvas, sceneBounds, minimapScale, appState, setAppState],
-    );
+      };
 
-    const handleMouseMove = useCallback(
-      (event: React.MouseEvent) => {
-        if (!isDraggingRef.current || !minimapCanvas || !sceneBounds) {
-          return;
-        }
+      const handleGlobalMouseUp = () => {
+        isDraggingMinimapRef.current = false;
+        document.removeEventListener("mousemove", handleGlobalMouseMove);
+        document.removeEventListener("mouseup", handleGlobalMouseUp);
+      };
 
-        const rect = canvasRef.current?.getBoundingClientRect();
-        if (!rect) {
-          return;
-        }
+      document.addEventListener("mousemove", handleGlobalMouseMove);
+      document.addEventListener("mouseup", handleGlobalMouseUp);
+    },
+    [appState.minimapPosition, setAppState],
+  );
 
-        const deltaX = event.clientX - dragStartRef.current.x;
-        const deltaY = event.clientY - dragStartRef.current.y;
-
-        const sceneDeltaX = deltaX / minimapScale;
-        const sceneDeltaY = deltaY / minimapScale;
-
-        const newScrollX = appState.scrollX - sceneDeltaX;
-        const newScrollY = appState.scrollY - sceneDeltaY;
-
-        setAppState({
-          scrollX: newScrollX,
-          scrollY: newScrollY,
-        });
-
-        dragStartRef.current = { x: event.clientX, y: event.clientY };
-      },
-      [minimapCanvas, sceneBounds, minimapScale, appState, setAppState],
-    );
-
-    const handleMouseUp = useCallback(() => {
-      isDraggingRef.current = false;
-    }, []);
-
-    useEffect(() => {
-      const canvas = canvasRef.current;
-      if (!canvas || !minimapCanvas) {
-        return;
-      }
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        return;
-      }
-
-      // clearing canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const offsetX = Math.max(0, (canvas.width - minimapCanvas.width) / 2);
-      const offsetY = Math.max(0, (canvas.height - minimapCanvas.height) / 2);
-
-      ctx.drawImage(minimapCanvas, offsetX, offsetY);
-
-      if (viewportRect) {
-        const rectX = viewportRect.x + offsetX;
-        const rectY = viewportRect.y + offsetY;
-
-        ctx.strokeStyle = appState.theme === "dark" ? "#ffffff" : "#000000";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(rectX, rectY, viewportRect.width, viewportRect.height);
-
-        ctx.fillStyle = "rgba(0, 123, 255, 0.2)";
-        ctx.fillRect(rectX, rectY, viewportRect.width, viewportRect.height);
-      }
-    }, [minimapCanvas, viewportRect, appState.theme]);
-
-    const handleZoomIn = useCallback(() => {
-      const newZoom = getNormalizedZoom(appState.zoom.value + ZOOM_STEP);
-      const zoomState = getStateForZoom(
-        {
-          viewportX: appState.width / 2 + appState.offsetLeft,
-          viewportY: appState.height / 2 + appState.offsetTop,
-          nextZoom: newZoom,
-        },
-        appState,
-      );
-      setAppState({
-        ...zoomState,
-        userToFollow: null,
-      });
-    }, [appState, setAppState]);
-
-    const handleZoomOut = useCallback(() => {
-      const newZoom = getNormalizedZoom(appState.zoom.value - ZOOM_STEP);
-      const zoomState = getStateForZoom(
-        {
-          viewportX: appState.width / 2 + appState.offsetLeft,
-          viewportY: appState.height / 2 + appState.offsetTop,
-          nextZoom: newZoom,
-        },
-        appState,
-      );
-      setAppState({
-        ...zoomState,
-        userToFollow: null,
-      });
-    }, [appState, setAppState]);
-
-    const handleZoomToFit = useCallback(() => {
-      const zoomState = zoomToFit({
-        targetElements: elements,
-        appState,
-        fitToViewport: false,
-      });
-      setAppState(zoomState.appState);
-    }, [elements, appState, setAppState]);
-
-    const handleDoubleClick = useCallback(() => {
-      handleZoomToFit();
-    }, [handleZoomToFit]);
-
-    if (!isVisible) {
-      return null;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !minimapCanvas) {
+      return;
     }
 
-    return (
-      <div
-        style={{
-          position: "fixed",
-          bottom: "20px",
-          right: "20px",
-          zIndex: 1000,
-          backgroundColor: appState.theme === "dark" ? "#2a2a2a" : "#ffffff",
-          border: `1px solid ${appState.theme === "dark" ? "#555" : "#ddd"}`,
-          borderRadius: "4px",
-          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
-          padding: "8px",
-          cursor: "grab",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: "4px",
-            left: "8px",
-            backgroundColor: appState.theme === "dark" ? "#444" : "#f0f0f0",
-            color: appState.theme === "dark" ? "#fff" : "#000",
-            padding: "2px 6px",
-            borderRadius: "10px",
-            fontSize: "10px",
-            fontWeight: "bold",
-            zIndex: 1,
-          }}
-        >
-          {Math.round(appState.zoom.value * 100)}%
-        </div>
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
 
+    // clearing canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const offsetX = Math.max(0, (canvas.width - minimapCanvas.width) / 2);
+    const offsetY = Math.max(0, (canvas.height - minimapCanvas.height) / 2);
+
+    ctx.drawImage(minimapCanvas, offsetX, offsetY);
+
+    if (viewportRect) {
+      const rectX = viewportRect.x + offsetX;
+      const rectY = viewportRect.y + offsetY;
+
+      ctx.fillStyle = "rgba(0, 123, 255, 0.2)";
+      ctx.fillRect(rectX, rectY, viewportRect.width, viewportRect.height);
+
+      ctx.strokeStyle = appState.theme === "dark" ? "#ffffff" : "#0066cc";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(rectX, rectY, viewportRect.width, viewportRect.height);
+    }
+  }, [minimapCanvas, viewportRect, appState.theme]);
+
+  const handleZoomToFit = useCallback(() => {
+    const zoomState = zoomToFit({
+      targetElements: elements,
+      appState,
+      fitToViewport: false,
+    });
+    setAppState(zoomState.appState);
+  }, [elements, appState, setAppState]);
+
+  const handleDoubleClick = useCallback(() => {
+    handleZoomToFit();
+  }, [handleZoomToFit]);
+
+  if (!appState.showMinimap) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: `${appState.minimapPosition.x}px`,
+        top: `${appState.minimapPosition.y}px`,
+        zIndex: 1000,
+      }}
+    >
+      <Island padding={1}>
+        {/* Header area for dragging */}
         <div
+          data-minimap-header
           style={{
-            position: "absolute",
-            top: "4px",
-            right: "8px",
             display: "flex",
-            gap: "2px",
-            zIndex: 1,
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "6px",
+            padding: "2px 6px",
+            cursor: isDraggingMinimapRef.current ? "grabbing" : "grab",
+            userSelect: "none",
           }}
+          onMouseDown={handleMinimapMouseDown}
         >
-          <button
-            onClick={handleZoomOut}
+          <div
             style={{
-              width: "20px",
-              height: "20px",
-              border: "none",
-              borderRadius: "3px",
-              backgroundColor: appState.theme === "dark" ? "#555" : "#ddd",
-              color: appState.theme === "dark" ? "#fff" : "#000",
-              cursor: "pointer",
-              fontSize: "12px",
+              fontSize: "11px",
+              fontWeight: "500",
+              color: "var(--text-primary-color)",
+            }}
+          >
+            Minimap
+          </div>
+          <div
+            style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              fontWeight: "bold",
+              gap: "6px",
             }}
-            title="Zoom Out"
           >
-            −
-          </button>
-          <button
-            onClick={handleZoomIn}
-            style={{
-              width: "20px",
-              height: "20px",
-              border: "none",
-              borderRadius: "3px",
-              backgroundColor: appState.theme === "dark" ? "#555" : "#ddd",
-              color: appState.theme === "dark" ? "#fff" : "#000",
-              cursor: "pointer",
-              fontSize: "12px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontWeight: "bold",
-            }}
-            title="Zoom In"
-          >
-            +
-          </button>
+            <div
+              style={{
+                fontSize: "10px",
+                color: "var(--text-primary-color)",
+                opacity: 0.8,
+              }}
+            >
+              {Math.round(appState.zoom.value * 100)}%
+            </div>
+            <div
+              style={{
+                fontSize: "9px",
+                color: "var(--keybinding-color)",
+                backgroundColor: "var(--button-gray-1)",
+                padding: "1px 3px",
+                borderRadius: "2px",
+                fontWeight: "500",
+                border: "1px solid var(--default-border-color)",
+              }}
+            >
+              M
+            </div>
+          </div>
         </div>
 
         <canvas
@@ -389,37 +373,15 @@ const Minimap: React.FC<MinimapProps> = React.memo(
           height={MINIMAP_SIZE}
           style={{
             display: "block",
-            cursor: isDraggingRef.current ? "grabbing" : "grab",
+            borderRadius: "var(--border-radius-md)",
+            cursor: "crosshair",
           }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseDown={handleCanvasMouseDown}
+          onMouseMove={handleCanvasMouseMove}
+          onMouseUp={handleCanvasMouseUp}
+          onMouseLeave={handleCanvasMouseUp}
           onDoubleClick={handleDoubleClick}
         />
-        {onToggle && (
-          <button
-            onClick={onToggle}
-            style={{
-              position: "absolute",
-              bottom: "-8px",
-              right: "-8px",
-              width: "20px",
-              height: "20px",
-              borderRadius: "50%",
-              border: "none",
-              backgroundColor: appState.theme === "dark" ? "#555" : "#ddd",
-              color: appState.theme === "dark" ? "#fff" : "#000",
-              cursor: "pointer",
-              fontSize: "12px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            ×
-          </button>
-        )}
 
         {appState.collaborators &&
           Object.values(appState.collaborators).map((collaborator) => {
@@ -457,8 +419,8 @@ const Minimap: React.FC<MinimapProps> = React.memo(
                 key={collaborator.socketId || collaborator.id}
                 style={{
                   position: "absolute",
-                  left: minimapCollabMinX + offsetX,
-                  top: minimapCollabMinY + offsetY,
+                  left: minimapCollabMinX + offsetX + 8, // Account for Island padding
+                  top: minimapCollabMinY + offsetY + 8 + 24, // Account for header only
                   width: minimapCollabMaxX - minimapCollabMinX,
                   height: minimapCollabMaxY - minimapCollabMinY,
                   border: `2px solid ${
@@ -474,10 +436,10 @@ const Minimap: React.FC<MinimapProps> = React.memo(
               />
             );
           })}
-      </div>
-    );
-  },
-);
+      </Island>
+    </div>
+  );
+});
 
 Minimap.displayName = "Minimap";
 

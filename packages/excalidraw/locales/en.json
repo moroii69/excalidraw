@@ -229,6 +229,7 @@
     "zenMode": "Zen mode",
     "objectsSnapMode": "Snap to objects",
     "exitZenMode": "Exit zen mode",
+    "toggleMinimap": "Toggle minimap",
     "cancel": "Cancel",
     "saveLibNames": "Save name(s) and exit",
     "clear": "Clear",

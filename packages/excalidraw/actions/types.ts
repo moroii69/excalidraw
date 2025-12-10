@@ -125,6 +125,7 @@ export type ActionName =
   | "toggleLinearEditor"
   | "toggleEraserTool"
   | "toggleHandTool"
+  | "toggleMinimap"
   | "selectAllElementsInFrame"
   | "removeAllElementsFromFrame"
   | "updateFrameRendering"

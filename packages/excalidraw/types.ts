@@ -458,6 +458,10 @@ export interface AppState {
   // and also remove groupId from this map
   lockedMultiSelections: { [groupId: string]: true };
   bindMode: BindMode;
+
+  /** minimap */
+  showMinimap: boolean;
+  minimapPosition: { x: number; y: number };
 }
 
 export type SearchMatch = {
