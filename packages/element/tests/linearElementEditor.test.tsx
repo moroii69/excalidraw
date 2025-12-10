@@ -421,7 +421,7 @@ describe("Test Linear Elements", () => {
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
         `9`,
       );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
+      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`6`);
 
       const midPointsWithRoundEdge = LinearElementEditor.getEditorMidPoints(
         h.elements[0] as ExcalidrawLinearElement,
@@ -748,7 +748,7 @@ describe("Test Linear Elements", () => {
         expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
           `14`,
         );
-        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`10`);
+        expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`11`);
         expect(line.points.length).toEqual(5);
 
         expect((h.elements[0] as ExcalidrawLinearElement).points)

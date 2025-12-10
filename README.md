@@ -31,6 +31,4 @@ The Enhanced editor adds:
 
 - Minimap support.
 
-
-
 I’ll continue adding new features based on requests from the official Excalidraw Discord server.
