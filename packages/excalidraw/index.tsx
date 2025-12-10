@@ -303,6 +303,7 @@ export {
 } from "@excalidraw/utils/withinBounds";
 
 export { DiagramToCodePlugin } from "./components/DiagramToCodePlugin/DiagramToCodePlugin";
+export { default as Minimap } from "./components/Minimap";
 export { getDataURL } from "./data/blob";
 export { isElementLink } from "@excalidraw/element";
 

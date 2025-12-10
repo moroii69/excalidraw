@@ -48,6 +48,7 @@ import { ActiveConfirmDialog } from "./ActiveConfirmDialog";
 import { useEditorInterface, useStylesPanelMode } from "./App";
 import { OverwriteConfirmDialog } from "./OverwriteConfirm/OverwriteConfirm";
 import { sidebarRightIcon } from "./icons";
+import Minimap from "./Minimap";
 import { DefaultSidebar } from "./DefaultSidebar";
 import { TTDDialog } from "./TTDDialog/TTDDialog";
 import { Stats } from "./Stats";
@@ -631,6 +632,7 @@ const LayerUI = ({
           {renderSidebars()}
         </>
       )}
+      <Minimap />
     </>
   );
 

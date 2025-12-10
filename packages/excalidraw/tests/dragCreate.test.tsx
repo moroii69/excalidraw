@@ -125,7 +125,7 @@ describe("Test dragCreate", () => {
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
         `5`,
       );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
+      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`6`);
       expect(h.state.selectionElement).toBeNull();
 
       expect(h.elements.length).toEqual(1);
@@ -159,7 +159,7 @@ describe("Test dragCreate", () => {
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
         `6`,
       );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`6`);
+      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
       expect(h.state.selectionElement).toBeNull();
 
       expect(h.elements.length).toEqual(1);
@@ -197,7 +197,7 @@ describe("Test dragCreate", () => {
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
         `6`,
       );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`6`);
+      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
       expect(h.state.selectionElement).toBeNull();
 
       expect(h.elements.length).toEqual(1);
@@ -262,7 +262,7 @@ describe("Test dragCreate", () => {
       expect(renderInteractiveScene.mock.calls.length).toMatchInlineSnapshot(
         `5`,
       );
-      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`5`);
+      expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
       expect(h.state.selectionElement).toBeNull();
       expect(h.elements.length).toEqual(0);
     });
